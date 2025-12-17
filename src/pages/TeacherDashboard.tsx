@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Plus, 
@@ -19,13 +19,17 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { sampleAnnouncements, categories, departments, Announcement } from '@/data/sampleData';
+import { categories, departments, Announcement } from '@/data/sampleData';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/auth/AuthProvider';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
 
 const TeacherDashboard = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(sampleAnnouncements);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -35,37 +39,67 @@ const TeacherDashboard = () => {
   });
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
-  const myAnnouncements = announcements.filter(a => a.author === 'Dr. Sarah Mitchell');
+  const { data: announcements = [] } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: async () => {
+      const res = await apiFetch<{ announcements: Announcement[] }>('/announcements');
+      return res.announcements;
+    },
+  });
+
+  const myAnnouncements = useMemo(() => {
+    if (!user) return [];
+    return announcements.filter(a => a.author === user.fullName);
+  }, [announcements, user]);
+
+  const createAnnouncement = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        title: formData.title,
+        content: formData.content,
+        category: formData.category,
+        department: formData.department,
+        dueDate: formData.dueDate || undefined,
+        attachments: attachedFiles.map((f) => ({
+          name: f.name,
+          type: f.type.includes('pdf')
+            ? 'pdf'
+            : f.type.includes('image')
+              ? 'image'
+              : f.name.toLowerCase().endsWith('.zip')
+                ? 'zip'
+                : 'doc',
+          size: `${(f.size / 1024).toFixed(1)} KB`,
+        })),
+      };
+      const res = await apiFetch<{ announcement: Announcement }>('/announcements', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return res.announcement;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      setFormData({ title: '', content: '', category: '', department: '', dueDate: '' });
+      setAttachedFiles([]);
+      setShowCreateForm(false);
+      toast({
+        title: 'Announcement Posted! 🎉',
+        description: 'Your announcement has been published successfully.',
+      });
+    },
+    onError: (e) => {
+      toast({
+        title: 'Failed to publish',
+        description: e instanceof Error ? e.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newAnnouncement: Announcement = {
-      id: Date.now().toString(),
-      title: formData.title,
-      content: formData.content,
-      category: formData.category as Announcement['category'],
-      author: 'Dr. Sarah Mitchell',
-      authorRole: 'Dean of Academics',
-      department: formData.department,
-      createdAt: new Date().toISOString(),
-      dueDate: formData.dueDate || undefined,
-      attachments: attachedFiles.map(f => ({
-        name: f.name,
-        type: f.type.includes('pdf') ? 'pdf' : f.type.includes('image') ? 'image' : 'doc',
-        size: `${(f.size / 1024).toFixed(1)} KB`,
-      })),
-    };
-
-    setAnnouncements([newAnnouncement, ...announcements]);
-    setFormData({ title: '', content: '', category: '', department: '', dueDate: '' });
-    setAttachedFiles([]);
-    setShowCreateForm(false);
-
-    toast({
-      title: "Announcement Posted! 🎉",
-      description: "Your announcement has been published successfully.",
-    });
+    createAnnouncement.mutate();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,9 +303,9 @@ const TeacherDashboard = () => {
               <Button type="button" variant="secondary" onClick={() => setShowCreateForm(false)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="gradient" className="gap-2">
+              <Button type="submit" variant="gradient" className="gap-2" disabled={createAnnouncement.isPending}>
                 <Send className="w-4 h-4" />
-                Publish Post
+                {createAnnouncement.isPending ? 'Publishing...' : 'Publish Post'}
               </Button>
             </div>
           </form>

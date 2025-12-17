@@ -1,21 +1,58 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { GraduationCap, BookOpen, ArrowRight, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { GraduationCap, BookOpen, ArrowRight, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/auth/AuthProvider";
 
 const Login = () => {
-  const [selectedRole, setSelectedRole] = useState<'teacher' | 'student' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<
+    "teacher" | "student" | null
+  >(null);
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user, login, isBootstrapping } = useAuth();
 
-  const handleLogin = () => {
-    if (selectedRole) {
-      navigate(`/${selectedRole}`);
+  useEffect(() => {
+    if (!isBootstrapping && user) {
+      navigate(`/${user.role}`, { replace: true });
+    }
+  }, [isBootstrapping, navigate, user]);
+
+  const handleLogin = async () => {
+    if (!selectedRole) return;
+    if (!loginId.trim() || !password) return;
+
+    try {
+      setIsSubmitting(true);
+      const u = await login({
+        role: selectedRole,
+        loginId: loginId.trim(),
+        password,
+      });
+      navigate(`/${u.role}`, { replace: true });
+    } catch (e) {
+      toast({
+        title: "Login failed",
+        description: e instanceof Error ? e.message : "Invalid credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ background: 'var(--gradient-hero)' }}>
+    <div
+      className="min-h-screen relative overflow-hidden"
+      style={{ background: "var(--gradient-hero)" }}
+    >
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
@@ -61,16 +98,16 @@ const Login = () => {
         >
           {/* Teacher Card */}
           <motion.button
-            onClick={() => setSelectedRole('teacher')}
+            onClick={() => setSelectedRole("teacher")}
             className={`relative p-8 rounded-2xl text-left transition-all duration-300 group ${
-              selectedRole === 'teacher'
-                ? 'bg-card shadow-elevated ring-2 ring-primary'
-                : 'bg-card/80 backdrop-blur-xl shadow-card hover:shadow-elevated'
+              selectedRole === "teacher"
+                ? "bg-card shadow-elevated ring-2 ring-primary"
+                : "bg-card/80 backdrop-blur-xl shadow-card hover:shadow-elevated"
             }`}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
           >
-            {selectedRole === 'teacher' && (
+            {selectedRole === "teacher" && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -90,16 +127,16 @@ const Login = () => {
 
           {/* Student Card */}
           <motion.button
-            onClick={() => setSelectedRole('student')}
+            onClick={() => setSelectedRole("student")}
             className={`relative p-8 rounded-2xl text-left transition-all duration-300 group ${
-              selectedRole === 'student'
-                ? 'bg-card shadow-elevated ring-2 ring-primary'
-                : 'bg-card/80 backdrop-blur-xl shadow-card hover:shadow-elevated'
+              selectedRole === "student"
+                ? "bg-card shadow-elevated ring-2 ring-primary"
+                : "bg-card/80 backdrop-blur-xl shadow-card hover:shadow-elevated"
             }`}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
           >
-            {selectedRole === 'student' && (
+            {selectedRole === "student" && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -118,6 +155,46 @@ const Login = () => {
           </motion.button>
         </motion.div>
 
+        {/* Credentials */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="w-full max-w-2xl bg-card/80 backdrop-blur-xl shadow-card rounded-2xl p-6 mb-6"
+        >
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="loginId" className="capitalize">
+                {selectedRole ? `${selectedRole} ID` : "Select role first"}
+              </Label>
+              <Input
+                id="loginId"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder={
+                  selectedRole
+                    ? `Enter ${selectedRole} ID`
+                    : "Choose Teacher or Student above"
+                }
+                disabled={!selectedRole || isSubmitting}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                disabled={!selectedRole || isSubmitting}
+                className="h-12"
+              />
+            </div>
+          </div>
+        </motion.div>
+
         {/* Login Button */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -128,10 +205,19 @@ const Login = () => {
             variant="hero"
             size="xl"
             onClick={handleLogin}
-            disabled={!selectedRole}
+            disabled={
+              !selectedRole || !loginId.trim() || !password || isSubmitting
+            }
             className="group"
           >
-            Continue as {selectedRole ? selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1) : '...'}
+            {isSubmitting
+              ? "Signing in..."
+              : `Continue as ${
+                  selectedRole
+                    ? selectedRole.charAt(0).toUpperCase() +
+                      selectedRole.slice(1)
+                    : "..."
+                }`}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Button>
         </motion.div>
@@ -143,7 +229,7 @@ const Login = () => {
           transition={{ delay: 0.6 }}
           className="mt-12 text-sm text-muted-foreground"
         >
-          Demo version with sample data
+          Please login with your university credentials
         </motion.p>
       </div>
     </div>

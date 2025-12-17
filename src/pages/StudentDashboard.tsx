@@ -5,14 +5,26 @@ import DashboardLayout from '@/components/DashboardLayout';
 import AnnouncementCard from '@/components/AnnouncementCard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { sampleAnnouncements, categories } from '@/data/sampleData';
+import { categories, type Announcement } from '@/data/sampleData';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
 
 const StudentDashboard = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
+  const { data: announcements = [] } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: async () => {
+      const res = await apiFetch<{ announcements: Announcement[] }>('/announcements');
+      return res.announcements;
+    },
+  });
+
   const filteredAnnouncements = useMemo(() => {
-    return sampleAnnouncements.filter(announcement => {
+    return announcements.filter(announcement => {
       const matchesSearch = announcement.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         announcement.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
         announcement.author.toLowerCase().includes(searchQuery.toLowerCase());
@@ -21,14 +33,14 @@ const StudentDashboard = () => {
       
       return matchesSearch && matchesFilter;
     });
-  }, [searchQuery, activeFilter]);
+  }, [announcements, searchQuery, activeFilter]);
 
   const stats = useMemo(() => ({
-    total: sampleAnnouncements.length,
-    assignments: sampleAnnouncements.filter(a => a.category === 'assignment').length,
-    events: sampleAnnouncements.filter(a => a.category === 'event').length,
-    urgent: sampleAnnouncements.filter(a => a.category === 'urgent').length,
-  }), []);
+    total: announcements.length,
+    assignments: announcements.filter(a => a.category === 'assignment').length,
+    events: announcements.filter(a => a.category === 'event').length,
+    urgent: announcements.filter(a => a.category === 'urgent').length,
+  }), [announcements]);
 
   return (
     <DashboardLayout role="student">
@@ -39,7 +51,7 @@ const StudentDashboard = () => {
         className="mb-8"
       >
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome back, Alex! 👋
+          Welcome back, {user?.fullName?.split(' ')[0] || 'Student'}! 👋
         </h1>
         <p className="text-muted-foreground">
           Stay updated with the latest announcements from your university

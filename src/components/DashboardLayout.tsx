@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useAuth } from '@/auth/AuthProvider';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -38,9 +39,10 @@ const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logout } = useAuth();
   
   const links = role === 'teacher' ? teacherLinks : studentLinks;
-  const userName = role === 'teacher' ? 'Dr. Sarah Mitchell' : 'Alex Johnson';
+  const userName = user?.fullName || (role === 'teacher' ? 'Teacher' : 'Student');
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,7 +126,10 @@ const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive"
-              onClick={() => navigate('/')}
+              onClick={() => {
+                logout();
+                navigate('/', { replace: true });
+              }}
             >
               <LogOut className="w-4 h-4" />
               Sign Out
